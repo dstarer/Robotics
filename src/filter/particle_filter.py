@@ -5,7 +5,7 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 import scipy.stats
-
+import random
 
 class Car(object):
     SENSOR_RANGE = 1000
@@ -129,17 +129,18 @@ class ParticleFilter(object):
 
         self.weights += 1.e-300
         self.weights = self.weights / self.weights.sum()
-
-        X = self.particles * self.weights
-        P = self.calc_convariance(X)
-
         # try to resample
         self.resample()
+        X = self.particles * self.weights
+        P = self.calc_convariance(X)
         return X, P
 
     def random(self):
-        base = np.cumsum(self.weights * 0.0 + 1 / self.np) - 1 / self.np
-        resampleid = base + np.random.randn(base.shape[1]) / self.np
+        resampleid = np.zeros((1, self.np))
+        for i in range(self.np):
+            resampleid[0, i] = random.uniform(0, 1.0)
+        # base = np.cumsum(self.weights * 0.0 + 1 / self.np) - 1 / self.np
+        # resampleid = base + np.random.randn(base.shape[1]) / self.np
         return resampleid
 
     def resample(self):
@@ -209,7 +210,7 @@ def main():
     particles = ParticleFilter(initial_X, initial_std, 100)
 
     Q = np.diag([0.1, np.radians(5)]) # process variance
-    R = np.diag([0.01, 0.01]) # measurement noise variance
+    R = np.diag([0.5, 0.5]) # measurement noise variance
 
     sim_time = 0
 
@@ -218,7 +219,7 @@ def main():
     PEst = np.eye(4)
     dt = 0.1
 
-    while sim_time < 10:
+    while sim_time < 100:
         sim_time += dt
         robot.move()
         u = robot.get_input()
@@ -240,7 +241,7 @@ def main():
         for landmark in room.get_landmarks():
             plt.plot(landmark[0], landmark[1], "*k")
 
-        # plt.plot(particles.particles[0, :], particles.particles[1, :], ".r")
+        plt.plot(particles.particles[0, :], particles.particles[1, :], ".r")
 
         plt.plot(np.array(hxTrue[0, :]).flatten(),
                  np.array(hxTrue[1, :]).flatten(), "-b")
