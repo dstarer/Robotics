@@ -25,6 +25,14 @@ import math
 import random
 
 
+def normalize(angle):
+    while angle > math.pi:
+        angle -= 2 * math.pi
+    while angle < -math.pi:
+        angle += math.pi * 2
+    return angle
+
+
 class Room(object):
     def __init__(self):
         self.landmarks = []
@@ -55,7 +63,7 @@ class Car(object):
         self.a = 0
         self.delta = 0
         self.process_variance = np.matrix(np.diag([0.1, np.radians(10)])) ** 2
-        self.observe_variance = np.matrix(np.diag([0.1, 0.1])) ** 2
+        self.observe_variance = np.matrix(np.diag([0.1, np.radians(5)])) ** 2
 
     def move(self, a=0.5, delta=np.radians(5), dt=0.1):
         self.x = self.x + self.v * dt * math.cos(self.yaw)
@@ -163,10 +171,10 @@ class Particle:
                        [0.0, 0.0],
                        [0.0, dt],
                        [dt, 0.0]])
-        # u = u + Q * np.matrix(np.random.randn(Q.shape[0])).T
+        u = u + Q * np.matrix(np.random.randn(Q.shape[0])).T
 
-        u[0, 0] = u[0, 0] + Q[0, 0] * np.random.randn()
-        u[1, 0] = u[1, 0] + Q[1, 1] * np.random.randn()
+        # u[0, 0] = u[0, 0] + Q[0, 0] * np.random.randn()
+        # u[1, 0] = u[1, 0] + Q[1, 1] * np.random.randn()
 
         self.X[0:self.RS, :] = F * self.X[0:self.RS, :] + B * u
 
@@ -197,10 +205,6 @@ class Particle:
         for i in range(observed_n):
             self.update_one_landmark(z[i, :].T, R)
 
-        # self.weight = 1
-        # for i in range(observed_n):
-        #     self._compute_weight(z[i, :].T, R)
-
         return self.X[0:self.RS, :], self.weight
 
     def update_one_landmark(self, z, R):
@@ -227,11 +231,25 @@ class Particle:
             self.LP[start_pos: end_pos, :] = P - K * Hlm * P
 
     def _compute_weight(self, z, R):
+        """
+        measure the probability of residual between observed and calculated
+        :param z:
+        :param R:
+        :return:
+        """
         lm_id = int(z[2, 0])
-        residual, Hx, Hlm, Slm = self._calc_innovation(lm_id, z, R)
-        num = math.exp(-0.5 * residual.T * np.linalg.inv(Slm) * residual)
-        den = 2.0 * math.pi * math.sqrt(np.linalg.det(Slm))
-        self.weight *= num / den
+        lm_state = self._get_nth_landmark_state(lm_id)
+        dx = lm_state[0, 0] - self.X[0, 0]
+        dy = lm_state[1, 0] - self.X[1, 0]
+        d = math.sqrt(dx * dx + dy * dy)
+        theta = math.atan2(dy, dx)
+        z_pred = np.matrix([d, theta]).T
+        residual = z[:2,] - z_pred
+        residual[1, 0] = normalize(residual[1, 0])
+
+        num = math.exp(-0.5 * residual.T * np.linalg.inv(R) * residual)
+        #den = 2.0 * math.pi * math.sqrt(np.linalg.det(R))
+        self.weight = self.weight + num
 
     def _add_landmark(self, z, R):
         """
@@ -259,9 +277,9 @@ class Particle:
         dy = lm_real[1, 0] - self.X[1, 0]
         square_distance = dx * dx + dy * dy
         z = np.matrix([math.sqrt(square_distance), math.atan2(dy, dx)]).T
-        z[1, 0] = z[1, 0] % 2 * np.pi - np.pi
-
         residual = z_observed[:2, :] - z
+        residual[1, 0] = normalize(residual[1, 0])
+
         Hx, Hlm = self._observation_jacob(square_distance, z[0, 0], dx, dy)
         Slm = Hlm * self._get_nth_landmark_covariance(n) * Hlm.T + R
         return residual, Hx, Hlm, Slm
@@ -283,30 +301,22 @@ def resample(particles):
     for particle in particles:
         weights.append(particle.weight)
     weights = np.matrix(weights)
-    print "resample..... %s " % weights.sum()
-    print(weights)
     Neff = 1. / (weights * weights.T)[0,0]
-    print("Neff ... %s " % Neff)
     if Neff < len(particles) / 2:
-        print("resample")
-        wcum = np.cumsum(weights, axis=0)
+        print("resample.... perform resample")
+        wcum = np.cumsum(weights)
         wcum[0, -1] = 1
 
         resample_id = []
         for i in range(len(particles)):
             resample_id.append(random.uniform(0, 1.0))
-        print("wcum")
-        print wcum
-        print "resample_id "
-        print(resample_id)
         indexes = []
         for i in range(len(particles)):
             ind = 0
             while wcum[0, ind] < resample_id[i]:
                 ind += 1
             indexes.append(ind)
-        print "indexes"
-        print indexes
+        print("indexes {}".format(indexes))
         new_particles = []
         weight_sum = 0
         for ind in indexes:
@@ -351,7 +361,7 @@ def update(particles, z, R):
         X_, w = particle.update(z, R)
         weights.append(w)
         weight_sum += w + 1e-30
-
+    print("update weights {}".format(weights))
     for i, particle in enumerate(particles):
         particle.weight = weights[i] / weight_sum
         weights[i] = particle.weight
@@ -373,12 +383,12 @@ def main():
     car = Car()
     initial_X = [0, 0, 0, 0]
     landmark_size = 2
-    p_n = 100
+    p_n = 50
     weight = 1. / p_n
     particles = [Particle(initial_X, landmark_size, room.get_number_of_landmarks(), weight) for i in range(p_n)]
 
     Q = np.matrix(np.diag([0.1, np.radians(3)]))
-    R = np.matrix(np.diag([0.1, 0.1]))
+    R = np.matrix(np.diag([0.1, np.radians(3)]))
 
     hxEst = np.matrix(np.zeros((4, 1)))
     hxTrue = np.matrix(np.zeros((4, 1)))

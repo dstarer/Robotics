@@ -207,10 +207,10 @@ def main():
     robot = Car()
     initial_X = np.matrix([0.0, 0.0, 0.0, 0.0]).T
     initial_std = np.matrix([0.1, 0.1, 0.1, 0.1]).T
-    particles = ParticleFilter(initial_X, initial_std, 100)
+    particles = ParticleFilter(initial_X, initial_std, 200)
 
-    Q = np.diag([0.1, np.radians(5)]) # process variance
-    R = np.diag([0.5, 0.5]) # measurement noise variance
+    Q = np.diag([0.1, np.radians(8)]) # process variance
+    R = np.diag([0.1, 0.1]) # measurement noise variance
 
     sim_time = 0
 
@@ -219,7 +219,9 @@ def main():
     PEst = np.eye(4)
     dt = 0.1
 
-    while sim_time < 100:
+    error_bias = []
+
+    while sim_time < 50:
         sim_time += dt
         robot.move()
         u = robot.get_input()
@@ -233,6 +235,9 @@ def main():
         X_true = robot.state()
         hxTrue = np.hstack((hxTrue, X_true))
 
+        dx = X_est[0, 0] - X_true[0, 0]
+        dy = X_est[1, 0] - X_true[1, 0]
+        error_bias.append((dx, dy))
         plt.cla()
 
         # for i in range(len(z_observed)):
@@ -255,6 +260,19 @@ def main():
         plt.grid(True)
         plt.pause(0.001)
 
-    plt.pause(1000)
+    n = len(error_bias)
+    X_error = [e[0] for e in error_bias]
+    Y_error = [e[1] for e in error_bias]
+    d_error = [ math.sqrt(e[0] * e[0] + e[1] * e[1]) for e in error_bias]
+    ind = range(n)
+
+    plt.figure()
+    plt.plot(ind, X_error, "b-", label="error_x")
+    plt.plot(ind, Y_error, "g-", label="error_y")
+    plt.plot(ind, d_error, "y-", label="error_dist")
+    plt.legend()
+
+    plt.show()
+
 if __name__ == '__main__':
     main()
