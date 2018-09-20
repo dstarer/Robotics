@@ -59,10 +59,11 @@ class Car(object):
     x = x + v * cos(yaw) * dt
     y = y + v * sin(yaw) * dt
     yaw = yaw + delta * dt
-    
+
     control vector:
     [v, delta]
     """
+
     def __init__(self, x=0, y=0, yaw=0):
         self.x = x
         self.y = y
@@ -72,7 +73,7 @@ class Car(object):
         self.process_variance = np.matrix(np.diag([0.1, np.radians(1)])) ** 2
         self.observe_variance = np.matrix(np.diag([0.1, np.radians(1)])) ** 2
 
-    def move(self, v=1, delta=np.radians(5), dt=0.1):
+    def move(self, v=2, delta=np.radians(10), dt=0.1):
         self.x = self.x + v * dt * math.cos(self.yaw)
         self.y = self.y + v * dt * math.sin(self.yaw)
         self.yaw = self.yaw + delta * dt
@@ -128,19 +129,19 @@ class Particle:
             self.RS = len(initial_X)
             self.LS = landmark_size
             self.n_landmark = landmark_number
-            self.X = np.zeros((self.RS + self.LS * self.n_landmark, 1))
-            self.X[0: self.RS, :] = np.matrix(initial_X).T
+            self.X_r = np.matrix(initial_X).T
+            self.X = np.matrix(np.zeros((landmark_number, landmark_size)))
             self.LP = np.matrix(np.zeros((landmark_number * self.LS, self.LS)))
-            self.M_DIST_H = 2.0
             self.weight = weight
 
     def state(self):
-        return self.X[: self.RS, :]
+        return self.X_r
 
     def make_copy(self):
-        o = Particle(self.X, self.LS, self.n_landmark, self.weight, copy=True)
+        o = Particle(self.X_r, self.LS, self.n_landmark, self.weight, copy=True)
         o.RS = self.RS
         o.LS = self.LS
+        o.X_r = self.X_r.copy()
         o.n_landmark = self.n_landmark
         o.X = self.X.copy()
         o.LP = self.LP.copy()
@@ -148,9 +149,7 @@ class Particle:
         return o
 
     def _get_nth_landmark_state(self, n):
-        start_pos = self.RS + n * self.LS
-        end_pos = start_pos + self.LS
-        return self.X[start_pos: end_pos, :]
+        return self.X[n, :].T
 
     def _get_nth_landmark_covariance(self, n):
         start_pos = n * self.LS
@@ -169,27 +168,29 @@ class Particle:
                        [0.0, 1.0, 0],
                        [0.0, 0.0, 1.0],
                        ])
-        B = np.matrix([[dt * math.cos(self.X[2, 0]), 0.0],
-                       [dt * math.sin(self.X[2, 0]), 0.0],
+        B = np.matrix([[dt * math.cos(self.X_r[2, 0]), 0.0],
+                       [dt * math.sin(self.X_r[2, 0]), 0.0],
                        [0.0, dt]])
-        self.X[0:self.RS, :] = F * self.X[0:self.RS, :] + B * u
-        self.X[2, 0] = normalize(self.X[2, 0])
+        self.X_r[2, 0] = normalize(self.X_r[2, 0])
+        self.X_r = F * self.X_r + B * u
 
     def predict(self, u, Q, dt):
         """
-        for particles filter, here, we don't need to calculate the covariance.
+        for particles filter, here, we don't need to calcuate the covariance.
         :param u:
         :param Q:
         :param dt:
         :return:
         """
-        u_p = u + Q * np.matrix(np.random.randn(Q.shape[0])).T
+        u_p = np.zeros((2, 1))
+        u_p[0, 0] = u[0, 0] + Q[0, 0] * np.random.randn()
+        u_p[1, 0] = u[1, 0] + Q[1, 1] * np.random.randn()
+        print " u predict {}".format(u_p)
         self._move_motion(u_p, dt)
-        return self.X[0:self.RS, :]
+        return self.X_r
 
     def update(self, z, R):
         """
-
         :param z: [[d_1, theta_1],
                     ...,
                     [d_i, theta_i],
@@ -207,42 +208,46 @@ class Particle:
 
     def update_one_landmark(self, z, R):
         """
-        1. search matching landmark
-        2.
         :param z: [d, theta].T
         :param R:
         :return:
         """
         lm_id = int(z[2, 0])
-        if abs(self.X[lm_id * self.LS + self.RS, 0]) < 0.01:
+        if abs(self.X[lm_id, 0]) < 0.01:
             self._add_landmark(z, R)
         else:
-            self._compute_weight(z)
+            self._compute_weight(z, R)
 
             residual, Hx, Hlm, Slm = self._calc_innovation(lm_id, z, R)
             K = self._get_nth_landmark_covariance(lm_id) * Hlm.T * np.linalg.inv(Slm)
 
+            self.X[lm_id, :] = self.X[lm_id,:] + (K * residual).T
+
             start_pos = lm_id * self.LS
             end_pos = start_pos + self.LS
-            self.X[self.RS+start_pos: self.RS+end_pos, :] = self.X[self.RS+start_pos: self.RS+end_pos, :] + K * residual
             P = self.LP[start_pos: end_pos, :]
             self.LP[start_pos: end_pos, :] = P - K * Hlm * P
 
-    def _compute_weight(self, z):
+    def _compute_weight(self, z, R):
         """
         measure the probability of residual between observed and calculated
         :param z:
+        :param R:
         :return:
         """
         lm_id = int(z[2, 0])
-        X_L = [self.X[0, 0] + z[0, 0] * math.cos(z[1, 0]), self.X[1, 0] + z[0, 0] * math.sin(z[1, 0])]
+        X_L = [self.X_r[0, 0] + z[0, 0] * math.cos(z[1, 0]), self.X_r[1, 0] + z[0, 0] * math.sin(z[1, 0])]
         X_L = np.matrix(X_L).T
-        residual = X_L - self._get_nth_landmark_state(lm_id)
+        residual = X_L - self.X[lm_id, :].T
+
+        # residual, Hx, Hlm, Slm = self._calc_innovation(lm_id, z, R)
         P = self._get_nth_landmark_covariance(lm_id)
-        try:
+        try :
             invP = np.linalg.inv(P)
         except np.linalg.linalg.LinAlgError:
+            print ("singular")
             return
+
         num = math.exp(-0.5 * residual.T * invP * residual)
         den = 2.0 * math.pi * math.sqrt(np.linalg.det(P))
         self.weight = self.weight * num / den
@@ -253,26 +258,26 @@ class Particle:
         :param R:
         :return:
         """
-        X_L = [self.X[0, 0] + z[0, 0] * math.cos(z[1, 0]), self.X[1, 0] + z[0, 0] * math.sin(z[1, 0])]
-        X_L = np.matrix(X_L).T
-        start_pos = int(z[2, 0]) * self.LS + self.RS
-        end_pos = start_pos + self.LS
-        self.X[start_pos: end_pos] = X_L
+        X_L = [self.X_r[0, 0] + z[0, 0] * math.cos(z[1, 0]), self.X_r[1, 0] + z[0, 0] * math.sin(z[1, 0])]
+        X_L = np.matrix(X_L)
+        lm_id = int(z[2, 0])
+        self.X[lm_id, :] = X_L
         # X_LM = H(R, z)
         # so, P = G_R * P_R_R * G_R.T + G_z * R * G_z.T
-        G_r = np.matrix([[math.cos(z[1,0]), -z[0,0] * math.sin(z[1, 0])],
+        G_r = np.matrix([[math.cos(z[1, 0]), -z[0, 0] * math.sin(z[1, 0])],
                          [math.sin(z[1, 0]), z[0, 0] * math.cos(z[1, 0])]])
         P = G_r * R * G_r.T
-        start_pos = int(z[2, 0]) * self.LS
+        start_pos = lm_id * self.LS
         end_pos = start_pos + self.LS
         self.LP[start_pos: end_pos, :] = P
 
     def _calc_innovation(self, n, z_observed, R):
-        lm_real = self._get_nth_landmark_state(n)
-        dx = lm_real[0, 0] - self.X[0, 0]
-        dy = lm_real[1, 0] - self.X[1, 0]
+        dx = self.X[n, 0] - self.X_r[0, 0]
+        dy = self.X[n, 1] - self.X_r[1, 0]
+
         square_distance = dx * dx + dy * dy
         z = np.matrix([math.sqrt(square_distance), math.atan2(dy, dx)]).T
+
         residual = z_observed[:2, :] - z
         residual[1, 0] = normalize(residual[1, 0])
 
@@ -281,31 +286,11 @@ class Particle:
         return residual, Hx, Hlm, Slm
 
     def _observation_jacob(self, square_distance, distance, dx, dy):
-        Hx = np.matrix([[-dx / distance, -dy / distance, 0, 0],
-                       [dy / square_distance, -dx / square_distance, 0, 0]])
+        Hx = np.matrix([[-dx / distance, -dy / distance, 0],
+                        [dy / square_distance, -dx / square_distance, 0]])
         Hlm = np.matrix([[dx / distance, dy / distance],
                          [-dy / square_distance, dx / square_distance]])
         return Hx, Hlm
-
-
-def normalize_particles(particles):
-    ws = 0
-    for p in particles:
-        ws += p.weight
-    try:
-        ws = 1. / ws
-        for p in particles:
-            p.weight *= ws
-    except ZeroDivisionError:
-        for p in particles:
-            p.weight = 1. / len(particles)
-
-
-def estimate_pose(particles):
-    X = np.zeros((3, 1))
-    for p in particles:
-        X += p.weight * p.state()
-    return X
 
 
 def resample(particles):
@@ -318,8 +303,10 @@ def resample(particles):
     for particle in particles:
         weights.append(particle.weight)
     weights = np.matrix(weights)
-    Neff = 1. / ((weights * weights.T)[0,0] + 1e-30)
+    Neff = 1. / (weights * weights.T)[0, 0]
+
     if Neff < len(particles) / 2:
+        print("resample.... perform resample")
         wcum = np.cumsum(weights)
         wcum[0, -1] = 1
 
@@ -335,9 +322,30 @@ def resample(particles):
         new_particles = []
         for i, ind in enumerate(indexes):
             new_particles.append(particles[ind].make_copy())
+
+        normalize_particles(new_particles)
         particles = new_particles
-        normalize_particles(particles)
     return particles
+
+
+def estimate_pose(particles):
+    X = np.matrix([0, 0, 0]).T
+    for particle in particles:
+        X = X + particle.X_r * particle.weight
+    return X
+
+
+def normalize_particles(particles):
+    ws = 0
+    for particle in particles:
+        ws += particle.weight
+    try:
+        ws = 1/ ws
+        for particle in particles:
+            particle.weight *= ws
+    except ZeroDivisionError:
+        for particle in particles:
+            particle.weight = 1. / len(particles)
 
 
 def predict(particles, u, Q, dt=0.1):
@@ -367,8 +375,8 @@ def update(particles, z, R):
     """
     for i, particle in enumerate(particles):
         particle.update(z, R)
-    particles = resample(particles)
-    return estimate_pose(particles), particles
+    normalize_particles(particles)
+    return estimate_pose(particles)
 
 
 def main():
@@ -397,22 +405,22 @@ def main():
 
     dt = 0.1
     t = 0
-    error = []
-    while t < 50:
+    while t < 100:
         t += dt
         car.move(dt=dt)
         u = car.get_input()
         Z = car.observe(room)
-        predict(particles, u, Q, dt)
-        X_est, particles = update(particles, Z, R)
-        X_true = car.get_state()
+
+        X_prd= predict(particles, u, Q, dt)
+        X_est = update(particles, Z, R)
+        particles = resample(particles)
         hxEst = np.hstack((hxEst, X_est))
         hxTrue = np.hstack((hxTrue, car.get_state()))
+
         plt.cla()
 
-        error.append((X_est[0, 0] - X_true[0, 0], X_est[1, 0] - X_true[1, 0]))
-        # for i in range(len(Z)):
-        #     plt.plot([X_true[0, 0], Z[i][1]], [X_true[1, 0], z_observed[i][2]], "-k")
+        # for i in range(len(z_observed)):
+        #     plt.plot([X_true[0, 0], z_observed[i][1]], [X_true[1, 0], z_observed[i][2]], "-k")
 
         for landmark in room.get_landmarks():
             plt.plot(landmark[0], landmark[1], "*k")
@@ -421,7 +429,7 @@ def main():
         par_y = []
         for particle in particles:
             state = particle.state()
-            par_x.append(state[0,0])
+            par_x.append(state[0, 0])
             par_y.append(state[1, 0])
         plt.plot(par_x, par_y, ".r")
 
@@ -431,19 +439,7 @@ def main():
         plt.plot(np.array(hxEst[0, :]).flatten(),
                  np.array(hxEst[1, :]).flatten(), "-r")
         plt.pause(0.001)
-
-    n = len(error)
-    X_error = [e[0] for e in error]
-    Y_error = [e[1] for e in error]
-    d_error = [ math.sqrt(e[0] * e[0] + e[1] * e[1]) for e in error]
-    ind = range(n)
-
-    plt.figure()
-    plt.plot(ind, X_error, "b-", label="error_x")
-    plt.plot(ind, Y_error, "g-", label="error_y")
-    plt.plot(ind, d_error, "y-", label="error_dist")
-    plt.legend()
-    plt.show()
+    plt.pause(100)
 
 
 if __name__ == '__main__':
