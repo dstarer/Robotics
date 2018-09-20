@@ -14,9 +14,16 @@ the mainly steps are as follows:
 3. observation:
     for each particle, use extend-kalman filter calc the covariance of each landmark, and the estimates the state.
     Then, we can get mean of particles as the robot's estimation state.
+
 4. resample
     according to the particles'weight, do resample.
     The resample process just replaces invalid particles.
+
+Notice:
+    1. weight computation:
+        for new landmark, just add it to state and set the position and variance
+        for landmark ever seen, just calculate the probabilty of observed in the pdf (X_lm, P_lm) where X_lm is the landmark's postion, and P_lm is the covariance.
+    2. weight normalization process, the weight of one particle maybe very small, in this case, we should reset the weight to  1./p_n
 '''
 
 import numpy as np
@@ -119,7 +126,7 @@ class Car(object):
 
 class Particle:
 
-    def __init__(self, initial_X, landmark_size, landmark_number, weight, copy=False):
+    def __init__(self, initial_X, landmark_size, landmark_number, copy=False):
         """
         :param initial_X:
         :type initial_X: [x, y, yaw, v]
@@ -132,20 +139,18 @@ class Particle:
             self.X_r = np.matrix(initial_X).T
             self.X = np.matrix(np.zeros((landmark_number, landmark_size)))
             self.LP = np.matrix(np.zeros((landmark_number * self.LS, self.LS)))
-            self.weight = weight
 
     def state(self):
         return self.X_r
 
     def make_copy(self):
-        o = Particle(self.X_r, self.LS, self.n_landmark, self.weight, copy=True)
+        o = Particle(self.X_r, self.LS, self.n_landmark, copy=True)
         o.RS = self.RS
         o.LS = self.LS
         o.X_r = self.X_r.copy()
         o.n_landmark = self.n_landmark
         o.X = self.X.copy()
         o.LP = self.LP.copy()
-        o.weight = self.weight
         return o
 
     def _get_nth_landmark_state(self, n):
@@ -156,7 +161,7 @@ class Particle:
         end_pos = start_pos + self.LS
         return self.LP[start_pos: end_pos, :]
 
-    def _move_motion(self, u, dt):
+    def move_motion(self, u, dt):
         """
 
         :param u: [a, delta].T
@@ -174,22 +179,7 @@ class Particle:
         self.X_r[2, 0] = normalize(self.X_r[2, 0])
         self.X_r = F * self.X_r + B * u
 
-    def predict(self, u, Q, dt):
-        """
-        for particles filter, here, we don't need to calcuate the covariance.
-        :param u:
-        :param Q:
-        :param dt:
-        :return:
-        """
-        u_p = np.zeros((2, 1))
-        u_p[0, 0] = u[0, 0] + Q[0, 0] * np.random.randn()
-        u_p[1, 0] = u[1, 0] + Q[1, 1] * np.random.randn()
-        print " u predict {}".format(u_p)
-        self._move_motion(u_p, dt)
-        return self.X_r
-
-    def update(self, z, R):
+    def update(self, Z, R):
         """
         :param z: [[d_1, theta_1],
                     ...,
@@ -199,12 +189,12 @@ class Particle:
         :type z: np.matrix
         :return:
         """
-        self.weight = 1
-        observed_n = z.shape[0]
+        w = 1
+        observed_n = Z.shape[0]
         for i in range(observed_n):
-            self.update_one_landmark(z[i, :].T, R)
+            w *= self.update_one_landmark(Z[i, :].T, R)
 
-        return self.X[0:self.RS, :], self.weight
+        return w
 
     def update_one_landmark(self, z, R):
         """
@@ -212,11 +202,12 @@ class Particle:
         :param R:
         :return:
         """
+        w = 1.
         lm_id = int(z[2, 0])
         if abs(self.X[lm_id, 0]) < 0.01:
             self._add_landmark(z, R)
         else:
-            self._compute_weight(z, R)
+            w = self._compute_weight(z, R)
 
             residual, Hx, Hlm, Slm = self._calc_innovation(lm_id, z, R)
             K = self._get_nth_landmark_covariance(lm_id) * Hlm.T * np.linalg.inv(Slm)
@@ -227,6 +218,7 @@ class Particle:
             end_pos = start_pos + self.LS
             P = self.LP[start_pos: end_pos, :]
             self.LP[start_pos: end_pos, :] = P - K * Hlm * P
+        return w
 
     def _compute_weight(self, z, R):
         """
@@ -246,11 +238,11 @@ class Particle:
             invP = np.linalg.inv(P)
         except np.linalg.linalg.LinAlgError:
             print ("singular")
-            return
+            return 1.
 
         num = math.exp(-0.5 * residual.T * invP * residual)
         den = 2.0 * math.pi * math.sqrt(np.linalg.det(P))
-        self.weight = self.weight * num / den
+        return num / den
 
     def _add_landmark(self, z, R):
         """
@@ -293,90 +285,108 @@ class Particle:
         return Hx, Hlm
 
 
-def resample(particles):
+class ParticleSlam(object):
     """
-    :param particles:
-    :return:
+    do pose estimation and mapping
+    Todo: how to get the landmark's position.
     """
-    normalize_particles(particles)
-    weights = []
-    for particle in particles:
-        weights.append(particle.weight)
-    weights = np.matrix(weights)
-    Neff = 1. / (weights * weights.T)[0, 0]
+    def __init__(self, p_n, l_n):
+        self.p_n = p_n
+        self.l_n = l_n
+        self.RS = 3
+        self.LS = 2
+        self.pw = np.zeros((p_n, 1)) + 1. / p_n
+        self.particles = [Particle([0.] * self.RS, self.LS, l_n) for i in range(p_n)]
+        self.NTH = p_n / 2
 
-    if Neff < len(particles) / 2:
-        print("resample.... perform resample")
-        wcum = np.cumsum(weights)
-        wcum[0, -1] = 1
+    def predict(self, u, Q, dt):
+        """
+        :param u:
+        :param Q:
+        :param dt:
+        :return:
+        """
+        for p in self.particles:
+            u_p = np.zeros((2, 1))
+            u_p[0, 0] = u[0, 0] + Q[0, 0] * np.random.randn()
+            u_p[1, 0] = u[1, 0] + Q[1, 1] * np.random.randn()
+            p.move_motion(u_p, dt)
+        return self._estimate_state()
 
-        resample_id = []
-        for i in range(len(particles)):
-            resample_id.append(random.uniform(0, 1.0))
-        indexes = []
-        for i in range(len(particles)):
-            ind = 0
-            while wcum[0, ind] < resample_id[i]:
-                ind += 1
-            indexes.append(ind)
-        new_particles = []
-        for i, ind in enumerate(indexes):
-            new_particles.append(particles[ind].make_copy())
+    def update(self, Z, R):
+        """
+        :param Z:
+        :param R:
+        :return:
+        """
+        for i, p in enumerate(self.particles):
+            w = p.update(Z, R)
+            self.pw[i, 0] = w
+        self._resample()
+        return self._estimate_state()
 
-        normalize_particles(new_particles)
-        particles = new_particles
-    return particles
+    def _generate_random(self):
+        rp = []
+        for i in range(self.p_n):
+            rp.append(random.uniform(0, 1))
+        return rp
 
+    def _resample(self):
+        """
+        :return:
+        """
+        self._normalize()
+        need_resample = False
+        try:
+            t = (self.pw.T * self.pw)[0, 0]
+            if t < 1e-6:
+                need_resample=True
+            else:
+                Neff = 1./ t
+                if Neff < self.NTH:
+                    need_resample = True
+        except ZeroDivisionError:
+            need_resample = True
 
-def estimate_pose(particles):
-    X = np.matrix([0, 0, 0]).T
-    for particle in particles:
-        X = X + particle.X_r * particle.weight
-    return X
+        if need_resample:
+            print("do resample")
+            wcum = np.cumsum(self.pw)
+            wcum[-1] = 1.
 
+            rp = self._generate_random()
+            # try to find the more important particles.
+            indexes = []
+            for p in rp:
+                ind = 0
+                while wcum[ind] < p:
+                    ind += 1
+                indexes.append(ind)
 
-def normalize_particles(particles):
-    ws = 0
-    for particle in particles:
-        ws += particle.weight
-    try:
-        ws = 1/ ws
-        for particle in particles:
-            particle.weight *= ws
-    except ZeroDivisionError:
-        for particle in particles:
-            particle.weight = 1. / len(particles)
+            new_particles = []
+            for ind in indexes:
+                new_particles.append(self.particles[ind].make_copy())
 
+            self.particles = new_particles
+            self._normalize()
 
-def predict(particles, u, Q, dt=0.1):
-    """
-    each particle does predict, and return the predict state.
-    :param particles:
-    :param u:
-    :param Q:
-    :param dt:
-    :return:
-    """
-    RS = particles[0].RS
-    X_pred = np.zeros((RS, 1))
-    for particle in particles:
-        X = particle.predict(u, Q, dt)
-        X_pred = X_pred + X * particle.weight
-    return X_pred
+    def _normalize(self):
+        ws = self.pw.sum()
+        try:
+            self.pw = self.pw / ws
+        except ZeroDivisionError:
+            self.pw = np.zeros((self.p_n, 1)) + 1. / self.p_n
 
+    def _estimate_state(self):
+        X = np.zeros((self.RS, 1))
+        for i, p in enumerate(self.particles):
+            X = X + self.pw[i, 0] * p.X_r
+        return X
 
-def update(particles, z, R):
-    """
-    for each particle does update
-    :param particles:
-    :param z:
-    :param R:
-    :return:
-    """
-    for i, particle in enumerate(particles):
-        particle.update(z, R)
-    normalize_particles(particles)
-    return estimate_pose(particles)
+    def get_particles_pose(self):
+        X = np.zeros((3, 0))
+        for p in self.particles:
+            X = np.hstack((X, p.X_r))
+        return X
 
 
 def main():
@@ -391,47 +401,41 @@ def main():
     room.add_landmark(-10.0, 15.0)
 
     car = Car()
-    initial_X = [0, 0, 0]
-    landmark_size = 2
     p_n = 50
-    weight = 1. / p_n
-    particles = [Particle(initial_X, landmark_size, room.get_number_of_landmarks(), weight) for i in range(p_n)]
 
-    Q = np.matrix(np.diag([0.1, np.radians(1)]))
-    R = np.matrix(np.diag([0.1, np.radians(1)]))
+    slam = ParticleSlam(p_n, room.get_number_of_landmarks())
+
+    Q = np.matrix(np.diag([0.1, np.radians(5)]))
+    R = np.matrix(np.diag([0.1, np.radians(5)]))
 
     hxEst = np.matrix(np.zeros((3, 1)))
     hxTrue = np.matrix(np.zeros((3, 1)))
 
     dt = 0.1
     t = 0
-    while t < 100:
+    error = []
+    while t < 30:
         t += dt
         car.move(dt=dt)
         u = car.get_input()
         Z = car.observe(room)
 
-        X_prd= predict(particles, u, Q, dt)
-        X_est = update(particles, Z, R)
-        particles = resample(particles)
+        slam.predict(u, Q, dt)
+        X_est = slam.update(Z, R)
+        X_true = car.get_state()
         hxEst = np.hstack((hxEst, X_est))
-        hxTrue = np.hstack((hxTrue, car.get_state()))
+        hxTrue = np.hstack((hxTrue, X_true))
 
         plt.cla()
 
         # for i in range(len(z_observed)):
         #     plt.plot([X_true[0, 0], z_observed[i][1]], [X_true[1, 0], z_observed[i][2]], "-k")
+        error.append((X_est[0, 0] - X_true[0, 0], X_est[1, 0] - X_true[1, 0]))
 
         for landmark in room.get_landmarks():
             plt.plot(landmark[0], landmark[1], "*k")
-
-        par_x = []
-        par_y = []
-        for particle in particles:
-            state = particle.state()
-            par_x.append(state[0, 0])
-            par_y.append(state[1, 0])
-        plt.plot(par_x, par_y, ".r")
+        P_X = slam.get_particles_pose()
+        plt.plot(P_X[0, :], P_X[1, :], ".r")
 
         plt.plot(np.array(hxTrue[0, :]).flatten(),
                  np.array(hxTrue[1, :]).flatten(), "-b")
@@ -439,7 +443,19 @@ def main():
         plt.plot(np.array(hxEst[0, :]).flatten(),
                  np.array(hxEst[1, :]).flatten(), "-r")
         plt.pause(0.001)
-    plt.pause(100)
+
+    n = len(error)
+    X_error = [e[0] for e in error]
+    Y_error = [e[1] for e in error]
+    d_error = [math.sqrt(e[0] * e[0] + e[1] * e[1]) for e in error]
+    ind = range(n)
+
+    plt.figure()
+    plt.plot(ind, X_error, "b-", label="error_x")
+    plt.plot(ind, Y_error, "g-", label="error_y")
+    plt.plot(ind, d_error, "y-", label="error_dist")
+    plt.legend()
+    plt.show()
 
 
 if __name__ == '__main__':
