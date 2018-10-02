@@ -84,6 +84,7 @@ $$
    $$
 
 
+
 $$
 \nabla _{\mathbb x} \mathbb f^T(\mathbb x) =  (\nabla \mathbb x \mathbb f)^T
 $$
@@ -133,9 +134,9 @@ $$
 $$
 若$\mathbb h(\mathbb x)$ $ \mathbb g(\mathbb x)$ 是两个m维的列向量，$A$是$m \times m$的方阵，$J_h(\mathbb x)，J_g(\mathbb x)$ 分别是对应的雅克比矩阵，则
 $$
-\nabla \mathbb h^T(\mathbb x) A \mathbb g(\mathbb x)  = J_h^T(\mathbb x) A \mathbb g(\mathbb x) + J_g^T(\mathbb x) A \mathbb h (\mathbb x)
+\nabla \mathbb h^T(\mathbb x) A \mathbb g(\mathbb x)  = J_h^T(\mathbb x) A \mathbb g(\mathbb x) + J_g^T(\mathbb x) A ^T\mathbb h (\mathbb x)
 $$
-若$\alpha(\mathbb x)，\mathbb f(\mathbb x)$分别是关于$\mathbb x$的实值函数和向量值函数，则
+若$\alpha(\mathbb x)，\mathbb f(\mathbb x)​$分别是关于$\mathbb x​$的实值函数和向量值函数，则
 $$
 \nabla _{\mathbb x} ({\alpha ({\mathbb x} )} {\mathbb f( \mathbb x)}) = {\mathbb f (\mathbb x)} \nabla _{\mathbb x^T} {\alpha(\mathbb x)} + {\alpha(\mathbb x)} \nabla _{\mathbb x} {\mathbb f(\mathbb x)}
 $$
