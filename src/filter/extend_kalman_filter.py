@@ -241,7 +241,8 @@ def main():
     R = np.diag([1, 1])
     Q_ref = Q
     step = 500
-    hxEst = initial_state
+    hxUkfEst = initial_state
+    hxEkfEst = initial_state
     hxTrue = np.matrix(car.state()).T
     hz = np.matrix(car.observe()).T
 
@@ -253,27 +254,30 @@ def main():
         u = np.matrix(car.get_input()).T
         z = np.matrix(car.observe()).T
         x_true = np.matrix(car.state()).T
-        # x_est, p_est = estimator.prediction(u, Q_ref, DT=0.1)
-        x_est, p_est = ukf_estimator.predict(u, Q_ref, DT=0.1)
+        x_ekf_est, p_ekf_est = estimator.prediction(u, Q_ref, DT=0.1)
+        x_ukf_est, p_ukf_est = ukf_estimator.predict(u, Q_ref, DT=0.1)
         Q_ref = Q * 1.1
         count += 1
-        if count == 1:
-            # x_est, p_est = estimator.estimation(z, R)
-            x_est, p_est = ukf_estimator.estimation(z, R)
+        if count == 10:
+            x_ekf_est, p_ekf_est = estimator.estimation(z, R)
+            x_ukf_est, p_ukf_est = ukf_estimator.estimation(z, R)
             Q_ref = Q
             # x_est, p_est = estimator.ekf_estimation(u, z, Q, R)
             count = 0
 
-        hxEst = np.hstack((hxEst, x_est))
+        hxEkfEst = np.hstack((hxEkfEst, x_ekf_est))
+        hxUkfEst = np.hstack((hxUkfEst, x_ukf_est))
         hxTrue = np.hstack((hxTrue, x_true))
         hz = np.hstack((hz, z))
 
         plt.cla()
         plt.plot(hz[:, 0], hz[:, 1], "g+")
         plt.plot(np.array(hxTrue[0, :]).flatten(),
-                 np.array(hxTrue[1, :]).flatten(), "-b")
-        plt.plot(np.array(hxEst[0, :]).flatten(),
-                 np.array(hxEst[1, :]).flatten(), "-r")
+                 np.array(hxTrue[1, :]).flatten(), "-b", "real state")
+        plt.plot(np.array(hxEkfEst[0, :]).flatten(),
+                 np.array(hxEkfEst[1, :]).flatten(), "-r", "ekf state")
+        plt.plot(np.array(hxUkfEst[0, :]).flatten(),
+                 np.array(hxUkfEst[1, :]).flatten(), "-k", "ukf state")
         # plot_covariance_ellipse(x_est, p_est)
         plt.axis("equal")
         plt.grid(True)
