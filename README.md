@@ -5,23 +5,23 @@
 
 ### 基础数学知识补充
 
-[矩阵求导常用操作]
+[矩阵求导常用操作](./doc/Matrix.md)
 
-[最小二乘法及其扩展问题]
+[最小二乘法](./doc/LeastSquare.md)
 
 [李群及李代数]
 
 ### 滤波算法/信息融合
 
-[贝叶斯滤波框架]
+[贝叶斯滤波框架](./doc/BayesFilter.md)
 
-[粒子滤波]
+[粒子滤波](./doc/particle-filter.md)
 
-[卡尔曼滤波]
+[卡尔曼滤波](./doc/Kalman.md)
 
-[扩展卡尔曼滤波]
+[扩展卡尔曼滤波](./doc/Nonlinear-kalman.md)
 
-[unscented kalman filter]
+[unscented kalman filter](./doc/Nonlinear-kalman.md)
 
 ### SLAM基础算法
 

@@ -122,4 +122,101 @@ def two_dimension_kalman():
     plt.plot(kalman_x, kalman_y, 'g-')
     plt.show()
 
-two_dimension_kalman()
+# two_dimension_kalman()
+
+
+class Robot(object):
+    def __init__(self, x=0.0, y=0.0):
+        self.x = 0.0
+        self.y = 0.0
+        self.v_x = 0.0
+        self.v_y = 0.0
+        self._process_variance = np.diag([0.5, 0.5]) ** 2
+        self._observe_variance = np.diag([0.5, 0.5]) ** 2
+
+    def move(self, a_x = 1., a_y = 1., dt=0.1):
+        a_x = a_x + np.random.randn() * self._process_variance[0, 0]
+        a_y = a_y + np.random.randn() * self._process_variance[1, 1]
+        self.x = self.x + self.v_x * dt
+        self.y = self.y + self.v_y * dt
+        self.v_x = self.v_x + a_x * dt
+        self.v_y = self.v_y + a_y * dt
+
+    def observe(self):
+        x = self.x + np.random.randn() * self._observe_variance[0, 0]
+        y = self.y + np.random.randn() * self._observe_variance[1, 1]
+        return np.matrix([x, y]).T
+
+    def get_true_state(self):
+        return np.matrix([self.x, self.y]).T
+
+
+class KFEstimator(object):
+    def __init__(self, x, y, vx, vy, P):
+        self.X = np.matrix([x, y, vx, vy]).T
+        self.P = np.matrix(P)
+
+    def predict(self, u, Q, dt=0.1):
+        A = np.matrix([ [1., 0., dt, 0. ],
+                        [0., 1., 0., dt ],
+                        [0., 0., 1., 0. ],
+                        [0., 0., 0., 1. ]])
+        B = np.matrix([ [0., 0.],
+                        [0., 0.],
+                        [dt, 0.],
+                        [0., dt]])
+        self.X = A * self.X + B * u
+        self.P = A * self.P * A.T + Q
+        return self.X
+
+    def update(self, z, R):
+        H = np.matrix([ [1., 0., 0., 0.],
+                        [0., 1., 0., 0.]])
+        residual = z - H * self.X
+        S = H * self.P * H.T + R
+        K = self.P * H.T * np.linalg.inv(S)
+
+        self.X = self.X + K * residual
+        self.P = self.P - K * H * self.P
+        return self.X
+
+
+def main():
+    robot = Robot()
+    P = np.diag([0.1, 0.1, 0.1, 0.1]) ** 2
+    Q = np.diag([0.5, 0.5, 0.1, 0.1]) ** 2
+    R = np.diag([1., 1.]) ** 2
+    estimator = KFEstimator(0, 0, 0, 0, P)
+
+    hxTrue = robot.get_true_state()
+    hxEst = np.matrix([0., 0., 0., 0.]).T
+    hz = np.matrix([0., 0.]).T
+    a_x, a_y = 1., 1.
+    t = 0
+    step = 50
+    while step > 0 :
+        step -= 1
+        t += 1
+        robot.move(a_x=a_x, a_y=a_y)
+        u = np.matrix([[a_x, a_y]]).T
+        x_est = estimator.predict(u, Q)
+        if t == 5:
+            t = 0
+            z = robot.observe()
+            hz = np.hstack((hz, z))
+            x_est = estimator.update(z, R)
+        hxEst = np.hstack((hxEst, x_est))
+        hxTrue = np.hstack((hxTrue, robot.get_true_state()))
+
+    plt.plot(np.array(hz[0, :]).flatten(), np.array(hz[1, :]).flatten(), "g+", label="observed")
+    plt.plot(np.array(hxTrue[0, :]).flatten(),
+             np.array(hxTrue[1, :]).flatten(), "-b", label="real")
+
+    plt.plot(np.array(hxEst[0, :]).flatten(),
+             np.array(hxEst[1, :]).flatten(), "-r", label="estimator")
+    plt.legend()
+    plt.show()
+
+
+if __name__ == '__main__':
+    main()

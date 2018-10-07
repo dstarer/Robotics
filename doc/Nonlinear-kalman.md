@@ -1,11 +1,169 @@
-#! env/bin/python
-# -*- encoding:utf-8 -*-
+# 卡尔曼滤波在非线性系统下的应用
 
-import numpy as np
-import math
-import matplotlib.pyplot as plt
-import scipy.linalg
+## 扩展卡尔曼滤波
 
+主要思路：将递推公式用一阶泰勒展开近似，缺点也比较明显，某些情况下，局部线性化并不能很好的逼近真实值。
+
+对于某系统模型有：
+$$
+\mathbb x_t = g(\mathbb x_{t-1}, \mathbb u_t) + e_t
+$$
+其中，$e_t$表示过程误差。
+
+对于观测模型有：
+$$
+\mathbb z_t = h(\mathbb x_t) + \delta_t
+$$
+其中，$\delta_t$是观测误差。
+
+函数$g(\mathbb x_{t-1}, \mathbb u_t)和h(\mathbb x_t)$可以是非线性函数，所以需要先将这两个函数做泰勒展开，有：
+$$
+g(\mathbb x_{t-1}, \mathbb u_t) \approx g(\mathbb \mu_{t-1}, \mathbb u_t) + g'(\mathbb \mu_{t-1}, \mathbb u_t) (\mathbb x_{t-1} - \mathbb \mu_{t-1}) \\
+= g(\mathbb \mu_{t-1}, \mathbb u_t) + G_t (\mathbb x_{t-1} - \mathbb \mu_{t-1})
+$$
+
+$$
+h(\mathbb x_t) \approx h(\mathbb \mu_t) + h'(\mathbb \mu_t) (\mathbb x_t - \mathbb \mu_t) \\
+= h(\mathbb \mu_t) + H_t (\mathbb x_t - \mathbb \mu_t)
+$$
+
+其中，$G_t, H_t$分别表示预测模型和观测模型对状态的一阶导（雅克比矩阵）。
+
+**预测**
+$$
+\mathbb x_t = g(\mathbb x_{t-1}, \mathbb u_t) \\
+P_t = G_tP_tG_t^T + Q_t
+$$
+**更新**
+$$
+Residual_t = \mathbb z_t - h(\mathbb x_t) \\
+S = H_t P_t H_t^T + R_t \\
+K_t = P_t H_t^T S^{-1} \\
+\mathbb x_t = \mathbb x_t + K_t Residual_t \\
+P_t = P_t - K_t H_t P_t
+$$
+
+
+## 无迹卡尔曼滤波
+
+主要思路：采样数值方法。因为系统比较复杂，直接采用蒙特卡罗方法，随机样本模拟，然后统计样本的均值和方差作为运动后的均值和方差。
+
+关键问题：如何选取样本？
+
+**无迹变换(Unscented Transform)**
+
+核心思想：近似一种概率分布比近似任意一个非线性函数或非线性变换容易。
+
+假设n维变量$\mathbb x$ 服从某均值为$\mathbb \mu$协方差为$P_x$的分布，变量经过某变换$\mathbb f$，得到$\mathbb y$，有$\mathbb y = \mathbb f(\mathbb x)$求$\mathbb y$的均值和分布。
+
+UT变换算法如下：
+
+1. 根据$\mathbb \mu, P$采用一定的采样策略获得$sigma$点集${\chi_i}$。
+   $$
+   \chi_0 = \mathbb \mu
+   $$
+
+   $$
+   \chi_i = \mathbb \mu + (\sqrt{(n + \lambda) P_x})_i \quad i = 1 \cdots n
+   $$
+
+   $$
+   \chi_{i+n} = \mu - (\sqrt{(n + \lambda) P_x})_i \quad i = 1 \cdots n
+   $$
+
+   $w_i^m，w_i^c$分别是均值和方差的权重。第一个点的均值权重和方差权重为：
+   $$
+   w_0^m = \frac {\lambda} { n + \lambda} \\
+   w_0^c = \frac {\lambda} {n + \lambda} + 1 - \alpha^2 + \beta
+   $$
+   剩下点的均值权重和方差权重为：
+   $$
+   w_i^m = w_i^c = \frac {1} {2(n + \lambda)} \quad i = 1 \cdots 2n
+   $$
+   $\alpha, \beta, \lambda$是输入的常量，也是需要调整的参数，
+   $$
+   \alpha \in (0, 1] \\
+   \beta = 2  (高斯分布时的最优取值)\\
+   \lambda = \alpha^2(n + k) - n \\
+   k \ge 0
+   $$
+   其中$k$影响着采样点到均值点的距离。
+
+2. 对$sigma$中的每个点分别做变换得到点集${\mathbb y_i}$
+
+3. 对点集$\mathbb y_i$，依据权重分别计算均值和方差，$\bar {\mathbb y}, P_y$，
+   $$
+   \bar {\mathbb y} = \Sigma_{i=0}^{2n} w_i^{m} \mathbb y_i \\
+   P_y = \Sigma_{i=0}^{2n} w_i^c (\mathbb y_i - \bar {\mathbb y}) (\mathbb y_i - \bar {\mathbb y})^T
+   $$
+
+
+
+UKF算法过程
+
+**预测**
+
+1. 根据UT变换生成$sigma$点集$\Chi_{t-1}$
+2. 对点集$\Chi_{t-1}$中的每一个点分别执行$g(u_t, \chi_i)$
+3. 根据式（13）计算点集均值和方差。
+
+**更新**
+
+1. 根据UT变换生成sigma点集$\Psi_{t}$
+
+2. 对点集$\Psi_t$中的每一个点执行观测变换函数$h(\psi_i)$,得到点集$\mathcal Z_t$
+
+3. 计算点集$\mathcal Z_t$的均值和协方差矩阵
+   $$
+   \bar {\mathcal z_t} = \Sigma_{i = 0} ^ {2n} w_i^{m} Z_t^i \\
+   S_t = \Sigma_{i=0} ^ {2n} w_i^c (Z_t^i - \bar {\mathcal z_t}) (Z_t^i - \bar {\mathcal z_t}) ^ T + Q_t
+   $$
+
+4. 计算x到z的变换矩阵
+   $$
+   P_t^{x, z} = \Sigma_{i=0}^{2n} w_i^c (\Psi_t^i - \mathbb \mu_t) (Z_t^i - \bar {\mathcal z_t})^T
+   $$
+
+5. 计算增益$K_t = P_t^{x, z} S_t$
+
+6. 更新均值和方差
+   $$
+   \mu_t = \mu_t + K_t (z_t - \bar {\mathcal z_t})
+   P_t = P_t - K_tS_tK_t^T
+   $$
+   
+
+## 应用
+
+车辆在低速状况下可以用如下模型描述：
+$$
+x_{t + 1} = x_t + v_t cos(\theta_t) \\
+y_{t + 1} = y_t + v_t sin(\theta_t) \\
+\theta_{t+1} =  \theta_t + \delta dt \\
+v_{t+1} = a
+$$
+写成矩阵乘法的形式：
+$$
+\mathbb x_{t +1} = \begin{pmatrix} 
+1. \quad 0.  \quad 0. \quad 0. \\
+0. \quad 1.  \quad 0. \quad 0. \\
+0. \quad 0.  \quad 1. \quad 0. \\
+0. \quad 0.  \quad 0. \quad 0. \\
+\end{pmatrix} \mathbb x_t + 
+\begin{pmatrix}
+dt \times cos(\theta_t) \quad 0 \\
+dt \times sin(\theta_t) \quad 0 \\
+0 \quad  dt \\
+1.0 \quad 0 \\
+\end {pmatrix} \mathbb u_t
+$$
+
+
+这里简化了模型的处理，$\delta, a$是控制输入。车上携带了一个可以输出定位信息的传感器，要求能实时估计估计车辆的位姿。
+
+完整代码可以参考[extend_kalman_filter.py](!../src/filter/extend_kalman_filter.py)，这里先给出车辆仿真部分的代码
+
+```python
 class Car:
     def __init__(self, x = 0.0, y = 0.0, yaw=0.0, v = 0.0, L=1.0):
         self.x = x
@@ -42,8 +200,32 @@ class Car:
 
     def state(self):
         return self.x, self.y, self.yaw, self.v
+```
 
+**扩展卡尔曼滤波**
 
+前面讨论过扩展卡尔曼滤波主要是对预测函数$g(\mathbb x_{t}, \mathbb u_t)$和观测函数$h(\mathbb x_{t})$做展开。
+
+根据模型，求导有
+$$
+G_t = \begin{pmatrix}
+1.0 \quad 0.0 \quad - dt \times sin(\theta_t) \quad dt \times cos(\theta_t) \\
+0.0 \quad 1.0 \quad dt \times cos(\theta_t) \quad dt \times sin(\theta_t) \\
+0.0 \quad 0.0 \quad 1.0 \quad 0.0 \\
+0.0 \quad 0.0 \quad 0.0 \quad 1.0
+\end{pmatrix}
+$$
+
+$$
+H_t = \begin {pmatrix}
+1 \quad 0 \quad 0 \quad 0 \\
+0 \quad 1 \quad 0 \quad 0 \\
+\end {pmatrix}
+$$
+
+具体实现代码
+
+```python
 class PositionEstimator:
     def __init__(self, initial_state, initial_P):
         """
@@ -100,8 +282,11 @@ class PositionEstimator:
         self.prediction(u, Q, DT=DT)
         self.estimation(z, R)
         return self.X, self.P
+```
 
+**无迹卡尔曼滤波**
 
+```python
 class UKFPoseEstimator(object):
     def __init__(self, initial_state, initial_p, ALPHA, BETA, KAPPA):
         self.X = initial_state
@@ -206,84 +391,8 @@ class UKFPoseEstimator(object):
         self.P = self.P - K * st * K.T
         return self.X, self.P
 
+```
 
-def plot_covariance_ellipse(xEst, PEst):
-    Pxy = PEst[0:2, 0:2]
-    eigval, eigvec = np.linalg.eig(Pxy)
+**结果**
 
-    if eigval[0] >= eigval[1]:
-        bigind = 0
-        smallind = 1
-    else:
-        bigind = 1
-        smallind = 0
-
-    t = np.arange(0, 2 * math.pi + 0.1, 0.1)
-    a = math.sqrt(eigval[bigind])
-    b = math.sqrt(eigval[smallind])
-    x = [a * math.cos(it) for it in t]
-    y = [b * math.sin(it) for it in t]
-    angle = math.atan2(eigvec[bigind, 1], eigvec[bigind, 0])
-    R = np.matrix([[math.cos(angle), math.sin(angle)],
-                   [-math.sin(angle), math.cos(angle)]])
-    fx = R * np.matrix([x, y])
-    px = np.array(fx[0, :] + xEst[0, 0]).flatten()
-    py = np.array(fx[1, :] + xEst[1, 0]).flatten()
-    plt.plot(px, py, "--r")
-
-
-def main():
-    car = Car()
-    initial_state = np.matrix(car.state()).T
-    initial_P = np.diag([0.1, 0.1, 0.1, 0.1])
-
-    Q = np.diag([0.01, 0.01, 0.01, 0.01])
-    R = np.diag([1, 1])
-    Q_ref = Q
-    step = 500
-    hxUkfEst = initial_state
-    hxEkfEst = initial_state
-    hxTrue = np.matrix(car.state()).T
-    hz = np.matrix(car.observe()).T
-
-    estimator = PositionEstimator(initial_state, initial_P)
-    ukf_estimator = UKFPoseEstimator(initial_state, initial_P, 0.001, 2, 0)
-    count = 0
-    for i in range(step):
-        car.move(dt=0.1)
-        u = np.matrix(car.get_input()).T
-        z = np.matrix(car.observe()).T
-        x_true = np.matrix(car.state()).T
-        x_ekf_est, p_ekf_est = estimator.prediction(u, Q_ref, DT=0.1)
-        x_ukf_est, p_ukf_est = ukf_estimator.predict(u, Q_ref, DT=0.1)
-        Q_ref = Q * 1.1
-        count += 1
-        if count == 10:
-            x_ekf_est, p_ekf_est = estimator.estimation(z, R)
-            x_ukf_est, p_ukf_est = ukf_estimator.estimation(z, R)
-            Q_ref = Q
-            # x_est, p_est = estimator.ekf_estimation(u, z, Q, R)
-            count = 0
-
-        hxEkfEst = np.hstack((hxEkfEst, x_ekf_est))
-        hxUkfEst = np.hstack((hxUkfEst, x_ukf_est))
-        hxTrue = np.hstack((hxTrue, x_true))
-        hz = np.hstack((hz, z))
-
-        plt.cla()
-        plt.plot(hz[:, 0], hz[:, 1], "g+")
-        plt.plot(np.array(hxTrue[0, :]).flatten(),
-                 np.array(hxTrue[1, :]).flatten(), "-b", "real state")
-        plt.plot(np.array(hxEkfEst[0, :]).flatten(),
-                 np.array(hxEkfEst[1, :]).flatten(), "-r", "ekf state")
-        plt.plot(np.array(hxUkfEst[0, :]).flatten(),
-                 np.array(hxUkfEst[1, :]).flatten(), "-k", "ukf state")
-        # plot_covariance_ellipse(x_est, p_est)
-        plt.axis("equal")
-        plt.grid(True)
-        plt.pause(0.01)
-    plt.show()
-
-
-if __name__ == '__main__':
-    main()
+![扩展卡尔曼滤波和无迹卡尔曼滤波](../assets/ekf_ukf_1.png)
