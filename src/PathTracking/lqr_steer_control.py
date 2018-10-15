@@ -129,7 +129,28 @@ def lqr_steering_control(state, cx, cy, cyaw, ck, pe, pth_e, dt=0.1):
     fb = pi_2_pi((-K * x)[0, 0])
 
     delta = ff + fb
+    # delta = fb
+    return delta, ind, e, th_e
 
+
+def steering_control(state, cx, cy, cyaw, ck, pe, pth_e, dt=0.1):
+    ind, e = calc_nearest_index(state, cx, cy, cyaw)
+    th_e = pi_2_pi(state.yaw - cyaw[ind])
+    v = state.v
+
+    A = np.matrix(np.zeros((2, 2)))
+    A[0, 0] = 1.0
+    A[0, 1] = v
+    A[1, 1] = 1.0
+    B = np.matrix(np.zeros((2, 1)))
+    B[1, 0] = v / state.L
+    Q = np.diag([1.5, 2])
+    R = np.eye(1)
+    K, _, _ = dlqr(A, B, Q, R)
+    x = np.matrix(np.zeros((2, 1)))
+    x[0, 0] = e
+    x[1, 0] = th_e
+    delta = pi_2_pi((-K * x)[0, 0])
     return delta, ind, e, th_e
 
 
@@ -151,14 +172,16 @@ def control(cx, cy, cyaw, ck, speed_profile, goal, show_animation=True):
     e, e_th = 0, 0.0
 
     while T >= time:
-        dl, target_ind, e, e_th = lqr_steering_control(state, cx, cy, cyaw, ck, e, e_th)
+        dl, target_ind, e, e_th = lqr_steering_control(state, cx, cy, cyaw, ck, e, e_th, dt)
+        # dl, target_ind, e, e_th = steering_control(state, cx, cy, cyaw, ck, e, e_th, dt)
         a_i = speed_control(speed_profile[target_ind], state.v)
 
         state.update(a_i, dl)
 
         if abs(state.v) <= stop_speed:
             target_ind += 1
-
+        if target_ind >= len(cx):
+            target_ind = len(cx) - 1
         time = time + dt
         dx = state.x - goal[0]
         dy = state.y - goal[1]
@@ -193,7 +216,7 @@ def main():
 
     cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
         ax, ay, ds=1.0)
-    target_speed = 15.0 / 3.6  # simulation parameter km/h -> m/s
+    target_speed = 20.0 / 3.6  # simulation parameter km/h -> m/s
 
     sp = calc_speed_profile(cx, cy, cyaw, target_speed)
 
