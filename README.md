@@ -25,9 +25,13 @@
 
 ### SLAM基础算法
 
-[基于滤波算法的SLAM算法]
+**基于滤波算法的SLAM算法**
 
-[基于图优化的SLAM算法]
+[Extended Kalman based SLAM]
+
+[Fast SLAM]
+
+[基于图优化的SLAM算法](./doc/Graph%20Based%20SLAM.md)
 
 ### 轨迹规划
 
@@ -41,7 +45,9 @@
 
 [stanley]
 
-[车辆运动学模型介绍]
+**车辆运动学模型介绍**
+
+[Bicycle Model]
 
 [MPC]
 
@@ -53,9 +59,9 @@
 
 [GPS+IMU融合]
 
-[惯导丢失融合处理]
+**Lidar**
 
-[Lidar]
+[地面提取及点云分割](doc/PointCloudProcess/FastSegmentation_2017.md)
 
 [Radar]
 
@@ -75,7 +81,11 @@
 
 [LOAM]
 
-[autoware]
+**autoware**
+
+[基于NDT的激光雷达SLAM]
+
+[点云分割与聚类]
 
 [apollo]
 
