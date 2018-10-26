@@ -43,7 +43,7 @@
 
 [pure-pursuit]
 
-[stanley]
+[stanley](doc/lane detection and following.md)
 
 **车辆运动学模型介绍**
 
@@ -81,11 +81,13 @@
 
 [LOAM]
 
-**autoware**
+**Autoware**
 
-[基于NDT的激光雷达SLAM]
+[基于NDT的激光雷达SLAM代码分析]
 
 [点云分割与聚类]
 
-[apollo]
+[点云目标跟踪方法讨论]
+
+**Apollo**
 
