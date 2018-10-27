@@ -41,9 +41,9 @@
 
 [PID]
 
-[pure-pursuit]
+[pure-pursuit](doc/PathTracking/Pure_Pursuit.md)
 
-[stanley](doc/lane detection and following.md)
+[stanley](doc/lane%20detection%20and%20following.md)
 
 **车辆运动学模型介绍**
 
