@@ -210,13 +210,15 @@ def control(cx, cy, cyaw, ck, speed_profile, goal, show_animation=True):
 def main():
     show_animation = True
     print("LQR steering control tracking start!!")
-    ax = [0.0, 6.0, 12.5, 10.0, 7.5, 3.0, -1.0]
-    ay = [0.0, -3.0, -5.0, 6.5, 3.0, 5.0, -2.0]
+    # ax = [0.0, 6.0, 12.5, 10.0, 7.5, 3.0, -1.0]
+    # ay = [0.0, -3.0, -5.0, 6.5, 3.0, 5.0, -2.0]
+    ax = [0.0, 100.0, 100.0, 50.0, 60.0]
+    ay = [0.0, 0.0, -30.0, -20.0, 0.0]
     goal = [ax[-1], ay[-1]]
 
     cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
         ax, ay, ds=1.0)
-    target_speed = 20.0 / 3.6  # simulation parameter km/h -> m/s
+    target_speed = 30.0 / 3.6  # simulation parameter km/h -> m/s
 
     sp = calc_speed_profile(cx, cy, cyaw, target_speed)
 

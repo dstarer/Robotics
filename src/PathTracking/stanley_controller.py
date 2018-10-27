@@ -64,6 +64,7 @@ def latitude_control(state, cx, cy, cyaw, last_target_idx, k=1.0):
     theta_d = np.arctan2(k * error_front_axle, state.v)
 
     delta = theta_e + theta_d
+    print "error_front_axle ", error_front_axle, " theta_e ", theta_e, " delta ", delta
     return delta, current_idx
 
 
@@ -95,7 +96,7 @@ def main():
     max_simulation_time = 100.0
 
     # Initial state
-    state = State(x=-0.0, y=5.0, yaw=np.radians(20.0), v=0.0)
+    state = State(x=-0.0, y=5.0, yaw=np.radians(0.0), v=2.0)
 
     last_idx = len(cx) - 1
     time = 0.0
