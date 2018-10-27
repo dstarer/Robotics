@@ -35,7 +35,7 @@ def normalize_angle(angle):
         angle -= math.pi * 2
 
     while angle < -math.pi:
-        angle += math.pi
+        angle += math.pi * 2
 
     return angle
 
