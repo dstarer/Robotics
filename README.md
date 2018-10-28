@@ -83,7 +83,7 @@
 
 **Autoware**
 
-[基于NDT的激光雷达SLAM代码分析]
+[基于NDT的激光雷达SLAM代码分析](doc/autoware/LidarLocalizer.md)
 
 [点云分割与聚类]
 
