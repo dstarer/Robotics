@@ -47,7 +47,7 @@
 
 **车辆运动学模型介绍**
 
-[Bicycle Model]
+[车辆运动模型](doc/PathTracking/KinematicModel.md)
 
 [MPC]
 

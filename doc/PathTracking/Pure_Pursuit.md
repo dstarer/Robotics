@@ -113,3 +113,10 @@ def find_target(closest, waypoints, look_forward):
 ### Cutting Corners问题
 
 Pure Pursuit算法在实际应用中，会在小转弯下，明显的向规划的路线内部切入，这是由于预瞄的时候，并不会考虑是否贴合路径，而只考虑预瞄点和当前航向的方向差。
+
+
+
+### ref
+
+1. Automatic Steering Methods for Autonomous Automobile Path Tracking
+2. Improved Trajectory Planning for On-Road Self-Driving Vehicles Via Combined Graph Search, Optimization & Topology Analysis

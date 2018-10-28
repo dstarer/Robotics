@@ -8,7 +8,7 @@
 
 *视觉循轨迹的控制方法中，常用的控制量主要有两个量，横向距离偏差和航向角偏差。*
 
-假设当前车辆的状态$S(t) = \begin{pmatrix} x_t , y_t, \theta_t, v_t \end{pmatrix}$，其中$x_t, y_t$是车辆的位置，$\theta_t$是车辆的航向角，$v_t$是车辆的速度。设$c(cx, cy, \theta_c)$是参考轨迹上距离当前车辆位置最近的一点，则有：​		
+假设当前车辆的状态$S(t) = \begin{pmatrix} x_t , y_t, \theta_t, v_t \end{pmatrix}$，其中$x_t, y_t$是车辆的位置，$\theta_t$是车辆的航向角，$v_t$是车辆的速度。设$c(cx, cy, \theta_c)$是参考轨迹上距离当前车辆位置最近的一点，则有：		
 
 ![stanley](/home/yunle/2018-10-24 13-45-38.png)
 
@@ -23,6 +23,7 @@
    $$
    eoa=\theta_e = \theta_c - \theta_t
    $$
+
 
 
 
@@ -148,3 +149,7 @@ $$
 1. 改进检测算法，目前检测算法上还有大幅度可以改进的点，从检测结果的稳定性上来考虑。
 2. 基于检测结果以及误差的增量模型做卡尔曼滤波融合，平滑检测结果。但是需要解决两个问题，一个是初值的设定(设置为0是否可靠？不同场景衔接过程中如何保证初值的可靠性)，一个是方差的衡量，目前可以通过多次实验设定一个值。**除此之外，应用卡尔曼滤波，还有一个重要的问题，基于模型推算是存在误差的，误差会累计下来，所以必须要提供一种方式能够纠正推算误差，这种纠正误差来源于检测结果，也就是说检测结果的误差必须是高精的(低方差)**
 
+### Reference
+
+1. Automatic Steering Methods for Autonomous Automobile Path Tracking
+2. Improved Trajectory Planning for On-Road Self-Driving Vehicles Via Combined Graph Search, Optimization & Topology Analysis
