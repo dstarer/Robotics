@@ -540,3 +540,10 @@ static void points_callback(const sensor_msgs::PointCloud2::ConstPtr& input)
 
 使用Carla模拟器录制一批点云数据，然后使用ndt_mapping构建点云地图，具体效果如图
 
+![ndt mapping map](../../assets/ndt_simulation_map.png)
+
+![ndt mapping simulation](../../assets/ndt_mapping_simulation.png)
+
+### 可改进的点
+
+仿真的时候，会明显感觉到，随着点云的扩大，匹配速度会越来越慢。一种办法是使用局部地图做匹配。但是局部地图匹配需要考虑闭环问题，随着数据量的增大，地图会无法构成闭环。另外一种改进办法是，使用前端做里程计估计，后端周期性做匹配，提高速度。
