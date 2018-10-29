@@ -73,7 +73,7 @@
 
 [ICP]
 
-[NDT]
+[NDT](doc/PointCloudProcess/NDT.md)
 
 [三维数据中线配准及平面配准方法]
 
