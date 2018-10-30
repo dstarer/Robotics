@@ -85,7 +85,7 @@
 
 [基于NDT的激光雷达SLAM代码分析](doc/autoware/LidarLocalizer.md)
 
-[点云分割与聚类]
+[点云分割与聚类](doc/autoware/lidar_euclidean_cluster_detector.md)
 
 [点云目标跟踪方法讨论]
 
