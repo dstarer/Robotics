@@ -56,7 +56,7 @@ $$
 
 对于一个更一般的实值代价函数$F(\mathbb x)$，为了求解最优解，通常做泰勒展开处理：
 $$
-F(\mathbb x + \Delta \mathbb x) \approx F(\mathbb x) + J^T(\mathbb x) \Delta \mathbb x +\frac{1}{2} (\Delta \mathbb x)^TH(\mathbb x) \Delta \mathbb x
+F(\mathbb x + \Delta \mathbb x) \approx F(\mathbb x) + J(\mathbb x) \Delta \mathbb x +\frac{1}{2} (\Delta \mathbb x)^TH(\mathbb x) \Delta \mathbb x
 $$
 其中，$J(x)$是$F(\mathbb x)$的雅克比矩阵，$H(\mathbb x)$是海塞矩阵。
 
@@ -70,12 +70,12 @@ $$
 
 对$\Delta \mathbb x$求导有
 $$
-\nabla _{\Delta x}F(\mathbb x + \Delta \mathbb x) \approx J(\mathbb x) + \frac {1} {2} (H(\mathbb x) + H^T(\mathbb x)) \Delta x
-\\= J(\mathbb x) + H(\mathbb x) \Delta \mathbb x
+\nabla _{\Delta x}F(\mathbb x + \Delta \mathbb x) \approx J^T(\mathbb x) + \frac {1} {2} (H(\mathbb x) + H^T(\mathbb x)) \Delta x
+\\= J^T(\mathbb x) + H(\mathbb x) \Delta \mathbb x
 $$
 令导数为0，则有：
 $$
-H(\mathbb x) \Delta x = - J(\mathbb x)
+H(\mathbb x) \Delta x = - J^T(\mathbb x)
 $$
 求解步骤如下：
 
@@ -109,7 +109,7 @@ $$
 $$
 令式（15）为0，
 $$
-J^T(\mathbb x) J(\mathbb x) \Delta \mathbb x = -  J^T(\mathbb x) \mathbb f(\mathbb x) 
+J^T(\mathbb x) J(\mathbb x) \Delta \mathbb x = -  J^T(\mathbb x) \mathbb f(\mathbb x)
 $$
 式（16）也被称为增量方程，也记做
 $$
@@ -165,7 +165,7 @@ $$
 $$
 求导得：
 $$
-(J^T(\mathbb x)J(\mathbb x) + \lambda D^TD) \Delta \mathbb x = - J^T(\mathbb x) \mathbb f(\mathbb x) 
+(J^T(\mathbb x)J(\mathbb x) + \lambda D^TD) \Delta \mathbb x = - J^T(\mathbb x) \mathbb f(\mathbb x)
 $$
 
 ### 其他求解算法
