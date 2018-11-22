@@ -27,7 +27,9 @@
 
 **基于滤波算法的SLAM算法**
 
-[Extended Kalman based SLAM]
+[Extended Kalman based SLAM](doc/SLAM_course.pdf)
+
+[EKF-SLAM简介](doc/ekf_slam.md)
 
 [Fast SLAM]
 
