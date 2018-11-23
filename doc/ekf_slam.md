@@ -24,24 +24,24 @@ SLAM中的各种关系：
 
 1. Motion-model
 
-   通常机器人的移动是根据发出的指令信号$\mathbb u$和执行的过程方差$ Q $决定：
+   通常机器人的移动是根据发出的指令信号$\mathbb u$和扰动量决定：
    $$
-   R \leftarrow \mathbb f(R, \mathbb u, Q)
+   \mathcal R \leftarrow \mathbb f(\mathcal R, \mathbb u, \mathcal c)
    $$
-   通常机器人的状态可以用$R_2 = (x, y, \theta)$表示，三维是用$R_3=(x, y, z, roll, pitch, yaw)$表示。例如在低速情况下，可以用自行车模型作为运动模型。模型具体根据机器人的移动方式来选择。
+   通常机器人的状态可以用$\mathcal R_2 = (x, y, \theta)$表示，三维是用$\mathcal R_3=(x, y, z, roll, pitch, yaw)$表示。例如在低速情况下，可以用自行车模型作为运动模型。模型具体根据机器人的移动方式来选择。
 
 2. Observation-model
 
    机器人通过某个传感器S观测到某个地标点$\mathcal L_i$,则有测量值$\mathbb y_i$：
    $$
-   \mathbb y_i = h(R, S, \mathcal L_i)
+   \mathbb y_i = h(\mathcal R, S, \mathcal L_i)
    $$
 
 3. Inverse-observation-model
 
    通过测量值和车辆的状态，我们可以得到地标$\mathcal L_i$:
    $$
-   \mathcal L_i = g(R, S, \mathbb y_i)
+   \mathcal L_i = g(\mathcal R, S, \mathbb y_i)
    $$
    理想情况下，g是h的逆，但是很多时候h是不可逆的，例如单目视觉里。
 
@@ -59,3 +59,29 @@ SLAM中的各种关系：
 | 地图上已有landmark损毁 | Landmark 删除   | 状态删除       |
 
 接下来，我们分别讨论每一类事件，并讨论如何维护地图。
+
+#### map
+
+map中主要保存的是已有的地标点，而在ekf-slam中，通常将机器人的状态和地标的状态一起保存维护：
+$$
+\mathbb x = \begin{bmatrix} \mathcal R \\ \mathcal M \end{bmatrix} = \begin{bmatrix} \mathcal R \\ \mathcal L_1 \\
+\vdots \\ \mathcal L_n \end{bmatrix}
+$$
+在ekf中，需要用均值$\mathbb{\bar x} $和方差$P$表示状态$\mathbb x$,
+$$
+\mathbb {\bar x} = \begin{bmatrix} \mathcal {\bar R} \\ \mathcal {\bar M} \end{bmatrix} = \begin{bmatrix} \mathcal {\bar R} \\ \mathcal {\bar L_1} \\
+\vdots \\ \mathcal {\bar L_n} \end{bmatrix}
+$$
+
+$$
+P = \begin{bmatrix} P_{\mathcal R \mathcal R} \quad P_{\mathcal R \mathcal M} \\ P_{\mathcal M \mathcal R} \quad P_{\mathcal M \mathcal M} \end{bmatrix} = 
+\begin{bmatrix}
+P_{\mathcal R \mathcal R} \quad P_{\mathcal R \mathcal L_1} \quad \cdots \quad P_{\mathcal R \mathcal L_n} \\
+P_{\mathcal L_1 \mathcal R} \quad P_{\mathcal L_1 \mathcal L_1} \quad \cdots \quad P_{\mathcal L1 \mathcal L_n} \\
+\vdots \quad \quad \vdots \quad \quad \ddots \quad \vdots  \\
+P_{\mathcal L_n \mathcal R} \quad P_{\mathcal L_n \mathcal L_1} \quad \cdots \quad P_{\mathcal L_n \mathcal L_n}
+\end{bmatrix}
+$$
+
+所以关键就是如何维护均值跟方差。
+
