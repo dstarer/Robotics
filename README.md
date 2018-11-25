@@ -79,6 +79,16 @@
 
 [三维数据中线配准及平面配准方法]
 
+### Data Association
+
+[Track Filtering And Gating && Global Nearest Neighbor]
+
+[匈牙利匹配算法]
+
+[Probability Data Association && Joint Probability Data Association]
+
+[Multi-Hypotheis Tracking && Markov Chain Monte Carlo Data Association]
+
 ### 开源代码分析
 
 [LOAM]

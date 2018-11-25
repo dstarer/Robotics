@@ -85,3 +85,238 @@ $$
 
 所以关键就是如何维护均值跟方差。
 
+**地图初始化**
+
+初始时，地图上没有地标点，并且所有状态都是确定的，不存在不确定状态，$\mathbb {\bar x}和方差P$分别是：
+$$
+\mathbb {\bar x} = \begin{bmatrix} 0 \\ 0 \\ 0\end{bmatrix}
+$$
+
+$$
+P = \begin{bmatrix} 0 \quad 0 \quad 0 \\ 0 \quad 0 \quad 0 \\ 0 \quad 0 \quad 0 \end{bmatrix}
+$$
+
+**Robot Motion**
+
+机器人的运动只会影响机器人的状态，对地标的状态没有影响，通常来说根据车辆移动模型我们知道：
+$$
+\mathbb x = \mathbb f(\mathbb x, \mathbb u, \mathbb n)
+$$
+所以EKF的预测步骤有：
+$$
+\mathbb {\bar x} = \mathbb f(\mathbb {\bar x}, \mathbb u, 0) \\
+P = F_{\mathbb x} P F_{\mathbb x}^T + F_{\mathbb n}NF_{\mathbb n}^T \\
+$$
+其中，
+$$
+F_{\mathbb x} = \frac {\partial \mathbb f(\mathbb {\bar x}, \mathbb u)} {\partial \mathbb x} \\
+F_{\mathbb n} = \frac {\partial \mathbb f(\mathbb {\bar x}, \mathbb u)} {\partial \mathbb n} 
+$$
+$F_{\mathbb n} N F_{\mathbb n}^T$实际中，也可以直接写成过程噪声矩阵$Q$。
+
+由于机器人的移动只影响了机器人的状态，也就是：
+$$
+\mathcal R \leftarrow f_{\mathcal R} (\mathcal R, \mathbb u, \mathbb n) \\
+\mathcal M \leftarrow \mathcal M
+$$
+所以可以确定雅克比矩阵$F_{\mathbb x}$一定是稀疏的，可以表示为：
+$$
+F_{\mathbb x} = \begin {bmatrix}
+\frac{\partial f_\mathcal R} {\partial \mathcal R} \quad 0 \\
+0 \quad I
+\end {bmatrix}
+$$
+
+$$
+F_{\mathbb n} = \begin {bmatrix} \frac {\partial f_{\mathcal R}} {\partial \mathbb n} \\ 0 \end {bmatrix}
+$$
+
+![update map upon robot motion](../assets/ekf_slam_map_update_robot_motion.png)
+
+​		Robot motion 时，地图数据更新。左侧是状态，右侧是方差。其中左侧深灰色是机器人状态，右侧深灰色表示的是机器人状态的协方差矩阵，浅灰色分别表示$\mathcal R \mathcal M$ 和$\mathcal M \mathcal R$的协方差矩阵。
+
+为了减少无用计算，实际的预测过程则按照以下的几条公式求解：
+$$
+\mathcal {\bar R} \leftarrow f_{\mathcal R} (\mathcal {\bar R}, \mathbb u, 0)
+$$
+
+$$
+P_{\mathcal R \mathcal R} \leftarrow \frac {\partial f_\mathcal R} {\partial \mathcal R} P_{\mathcal R \mathcal R} \frac {\partial f_\mathcal R} {\partial \mathcal R}^T + Q
+$$
+
+$$
+P_{\mathcal R \mathcal M} \leftarrow \frac {\partial f_\mathcal R} {\partial \mathcal R} P_{\mathcal R \mathcal M}
+$$
+
+$$
+P_{\mathcal M \mathcal R} \leftarrow P^T_{\mathcal R \mathcal M}
+$$
+
+**观测到已有地标**
+
+先讨论当观测到已有地标时如何更新地图状态。假设测量函数为：
+$$
+\mathbb y = h(\mathbb x) + \mathbb v
+$$
+其中，$\mathbb  y$是测量值，$\mathbb x$是当前的状态，$\mathbb v$是观测噪声，$h$是观测函数，EKF过程基本可以写成如下形式：
+$$
+\mathbb {\bar z} = \mathbb y - h(\mathbb {\bar x})
+$$
+
+$$
+Z = H_{\mathbb x} P H_{\mathbb x}^T + R
+$$
+
+$$
+K = P H_{\mathbb x}^T Z^{-1}
+$$
+
+$$
+\mathbb {\bar x} = \mathbb {\bar x}  + K \mathbb {\bar z}
+$$
+
+$$
+P = P - K Z K^T
+$$
+
+其中，$H_{\mathbb x} = \frac {\partial h(\mathbb {\bar x})} {\partial \mathbb x}$。
+
+在Ekf-slam中，地标的状态，只跟Robot状态，传感器以及地标有关，所以观测模型可以写成如下形式：
+$$
+\mathbb y_i = h_i(\mathcal R, \mathcal S, \mathcal L_i) + \mathbb v
+$$
+所以$H_{\mathbb x}$是一个稀疏的矩阵，其形式如下：
+$$
+H_{\mathbb x} = \begin{bmatrix}H_{\mathcal R} \quad 0 \quad \cdots \quad 0 \quad H_{\mathcal L_i} \quad 0 \quad \cdots \quad 0 \end{bmatrix}
+$$
+其中，
+$$
+H_{\mathcal R} = \frac {\partial h_i(\mathcal R, \mathcal S, \mathcal L_i)} {\partial \mathcal R}
+$$
+
+$$
+H_{\mathcal L_i} = \frac {\partial h_i({\mathcal R, \mathcal S, \mathcal L_i})} {\partial \mathcal L_i}
+$$
+
+![ekf_slam_update_map_upon_observation](../assets/ekf_slam_map_update_upon_observed.png)
+
+​				观测到已有目标时更新地图的状态，左侧是地图状态，右侧是协方差矩阵。
+
+完整的更新公式如下：
+$$
+\mathbb {\bar z} = \mathbb y_i - h_i(\mathcal {\bar R}, \mathcal S, \mathcal {\bar L_i})
+$$
+
+$$
+Z = \begin{bmatrix} H_\mathcal R  \quad H_\mathcal {L_i} \end{bmatrix} 
+\begin{bmatrix}
+P_{\mathcal R \mathcal R} \quad P_{\mathcal R \mathcal L_i} \\
+P_{\mathcal L_i \mathcal R} \quad P_{\mathcal L_i \mathcal L_i}
+\end{bmatrix}
+\begin{bmatrix}
+H^T_\mathcal R \\ H^T_\mathcal {L_i}
+\end{bmatrix} + R
+$$
+
+$$
+K =
+\begin{bmatrix}
+P_{\mathcal R \mathcal R} \quad P_{\mathcal R \mathcal L_i} \\
+P_{\mathcal L_i \mathcal R} \quad P_{\mathcal L_i \mathcal L_i}
+\end{bmatrix} \begin{bmatrix}
+H^T_\mathcal R \\ H^T_\mathcal {L_i}
+\end{bmatrix} Z^{-1}
+$$
+
+$$
+\mathbb {\bar x} \leftarrow \mathbb {\bar x} + K \mathbb {\bar z}
+$$
+
+$$
+P \leftarrow P - KZK^T
+$$
+
+**地标初始化** 
+
+当观测到新地标时，需要将地标初始化并加入到地图中维护状态。这里需要根据观测模型是不是可逆分解成两种情况。
+
+![ekf_slam_update_map_upon_lm_initialization.png](../assets/ekf_slam_update_map_upon_lm_initialization.png)
+
+​						新添加地标时，状态向量和协方差矩阵要更新的部分。
+
+如果观测模型可逆，也就是$h$存在反函数$g$，这时地标位置：
+$$
+\mathcal L_{n + 1} = g(\mathcal R, \mathcal S, \mathbb u_)
+$$
+下面分别计算$\mathcal {\bar L_{n+1}}和P_{\mathcal R \mathcal L_{n+1}}$,
+$$
+\mathcal {\bar L_{n+1}} = g(\mathcal {\bar R}, \mathcal S, \mathbb y_{n+1})
+$$
+
+$$
+G_{\mathcal R} = \frac {\partial g(\mathcal {\bar R}, \mathcal S, \mathbb y_{n+1})} {\partial \mathcal R}
+$$
+
+$$
+G_{\mathbb y_{n+1}} = \frac {\partial g(\mathcal {\bar R}, \mathcal S, \mathbb y_{n + 1})} {\partial \mathbb y_{n+1}}
+$$
+
+$$
+P_{\mathcal L \mathcal L} = G_\mathcal R P_{\mathcal R \mathcal R} G^T_\mathcal R  + G_{\mathbb y_{\mathbb n + 1}} R G_{\mathbb y_{\mathbb n + 1}}^T
+$$
+
+$$
+P_{\mathcal L \mathbb x} = G_\mathcal R P_{\mathcal R \mathbb x} =  G_\mathcal R  \begin{bmatrix} P_{\mathcal R \mathcal R} \quad P_{\mathcal R \mathcal M} \end{bmatrix}
+$$
+
+所以完整的更新如下：
+$$
+\mathbb {\bar x} = \begin{bmatrix} \mathbb {\bar x} \\ \mathcal {\bar L_{n+1}} \end{bmatrix}
+$$
+
+$$
+P = \begin{bmatrix}  P \quad P^T_{\mathcal L \mathbb x} \\
+P_{\mathcal L \mathbb x} \quad P_{\mathcal L \mathcal L}
+\end{bmatrix}
+$$
+
+如果观测模型不可逆，通常是依据某个先验信息求解，比如单目相机会依据摄像机的内外参数求解，一般反向映射函数可以写成如下形式：
+$$
+\mathcal L_{n+1} = g(\mathcal R, \mathcal S, \mathbb y_{n+1}, \mathbb s)
+$$
+其中$\mathbb s$是先验信息。假设$\mathbb s$是均值，$S$是其方差，则有
+
+$$
+\mathcal {\bar L_{n+1}} = g(\mathcal {\bar R}, \mathcal S, \mathbb y_{n+1}, \mathbb s)
+$$
+
+$$
+G_{\mathcal R} = \frac {\partial g(\mathcal {\bar R}, \mathcal S, \mathbb y_{n+1}, \mathbb s)} {\partial \mathcal R}
+$$
+
+$$
+G_{\mathbb y_{n+1}} = \frac {\partial g(\mathcal {\bar R}, \mathcal S, \mathbb y_{n + 1}, \mathbb s)} {\partial \mathbb y_{n+1}}
+$$
+
+$$
+G_\mathbb s = \frac {\partial g(\mathcal {\bar R}, \mathcal S, \mathbb y_{n + 1}, \mathbb s)} {\partial \mathbb s}
+$$
+
+$$
+P_{\mathcal L \mathcal L} = G_\mathcal R P_{\mathcal R \mathcal R} G^T_\mathcal R  + G_{\mathbb y_{\mathbb n + 1}} R G_{\mathbb y_{\mathbb n + 1}}^T + G_\mathbb s S G^T_\mathbb s
+$$
+
+$$
+P_{\mathcal L \mathbb x} = G_\mathcal R P_{\mathcal R \mathbb x} =  G_\mathcal R  \begin{bmatrix} P_{\mathcal R \mathcal R} \quad P_{\mathcal R \mathcal M} \end{bmatrix}
+$$
+
+所以完整的更新如下：
+$$
+\mathbb {\bar x} = \begin{bmatrix} \mathbb {\bar x} \\ \mathcal {\bar L_{n+1}} \end{bmatrix}
+$$
+
+$$
+P = \begin{bmatrix}  P \quad P^T_{\mathcal L \mathbb x} \\
+P_{\mathcal L \mathbb x} \quad P_{\mathcal L \mathcal L}
+\end{bmatrix}
+$$
